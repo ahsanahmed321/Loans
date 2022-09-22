@@ -40,13 +40,7 @@ contract Loans {
     }
 
     function getLatestPrice() public view returns (int256) {
-        (
-            uint80 roundID,
-            int256 price,
-            uint256 startedAt,
-            uint256 timeStamp,
-            uint80 answeredInRound
-        ) = priceFeed.latestRoundData();
+        (, int256 price, , , ) = priceFeed.latestRoundData();
         return price;
     }
 
@@ -82,6 +76,21 @@ contract Loans {
         return (fee, paid);
     }
 
+    function calculatePastBorrowFees(uint256 _amount, address sender)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 amountPaid;
+        if (_amount > usersPastBorrow[sender]) {
+            amountPaid = usersPastBorrow[sender];
+        } else {
+            amountPaid = _amount;
+        }
+        return
+            usersPastInterest[sender] * (amountPaid / usersPastBorrow[sender]);
+    }
+
     function lend(uint256 amount) external {
         IERC20(usdt).transferFrom(msg.sender, address(this), amount);
         uint256 lpTobeMinted = amount.div(getExchangeRate());
@@ -113,7 +122,7 @@ contract Loans {
 
         usersPastBorrow[msg.sender] += usersBorrowed[msg.sender];
 
-        (uint256 fee, uint256 paid) = calculateBorrowFee(
+        (uint256 fee, ) = calculateBorrowFee(
             usersBorrowed[msg.sender],
             msg.sender
         );
@@ -132,52 +141,24 @@ contract Loans {
 
     function repay(uint256 _amount) external {
         IERC20(usdt).transferFrom(msg.sender, address(this), _amount);
+
         (uint256 fee, uint256 paid) = calculateBorrowFee(_amount, msg.sender);
+        uint256 pastFee = calculatePastBorrowFees(_amount, msg.sender);
+
+        uint256 userPaidUSDT = paid - pastFee;
+        uint256 feesEarned = fee + pastFee;
 
         uint256 userReturnRatio = _amount / usersBorrowed[msg.sender];
 
         uint256 amountOut = usersCollateral[msg.sender] * userReturnRatio;
 
         usersCollateral[msg.sender] -= amountOut;
-        usersBorrowed[msg.sender] -= paid;
-        totalDeposits += paid;
-        totalBorrows -= paid;
-        totalFeesEarned += fee;
+        usersBorrowed[msg.sender] -= userPaidUSDT;
+        usersPastBorrow[msg.sender] -= userPaidUSDT;
+        totalDeposits += userPaidUSDT;
+        totalBorrows -= userPaidUSDT;
+        totalFeesEarned += feesEarned;
 
         payable(address(this)).transfer(amountOut);
     }
 }
-
-// borrow 100 USDT
-// after 2 days
-// borrow 100 USDT             past borrows = 100    past interest = 4        current borrows = 200
-// after 3 days
-// borrow 100 USDT             past borrows = 200    past interest = 4 + 12   current borrows = 300
-// after 4 days
-
-// Now on the 9th day user have to pay 300 USDT
-// on the 1st 100 USDT interest = 18
-// on the 2nd 100 USDT interest = 14
-// on the 3rd 100 USDT interest = 8
-
-// total interest 40
-
-// past interest =  16               past borrows = 200
-// current interest = 24             current borrow = 300      current day = 4
-
-// //Test Cases 1
-// user returning 100 USDT thats 1/2 of past borrows and 1/3 of current borrow so he will be paying = 8 + 8 = 16
-
-// past interest =  8               past borrows = 100
-// current interest = 16             current borrow = 200      current day = 4
-
-// user again paying 100 USDT thats complete past borrow and half of current borrow = 8 + 8 = 16
-
-// past interest =  0               past borrows = 0
-// current interest = 8             current borrow = 100      current day = 4
-
-// //Test Case 2
-// user returning 250 USDT so the user pays past interest on 200 and current interest on 250 = 16 + 19.9
-
-// past interest =  0               past borrows = 0
-// current interest = 4.1             current borrow = 50      current day = 4
