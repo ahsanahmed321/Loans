@@ -24,7 +24,8 @@ contract Loans {
     mapping(address => uint256) public usersCollateral; //ETH Value
     mapping(address => uint256) public usersBorrowed; //USDT Value
     mapping(address => uint256) public usersBorrowTimeStamp; //Timestamp
-    mapping(address => uint256) public userAccumalatedInterest; //USDT Value
+    mapping(address => uint256) public usersPastBorrow; //USDT Value
+    mapping(address => uint256) public usersPastInterest; //USDT Value
 
     constructor() {
         ERC20Token lpTokenContract = new ERC20Token("KUMAIL", "KUM");
@@ -110,14 +111,17 @@ contract Loans {
         int256 ethPrice = getLatestPrice();
         uint256 amountInUSDT = ((msg.value * uint256(ethPrice)) * 80) / 100;
 
-        usersBorrowed[msg.sender] += amountInUSDT;
-        usersCollateral[msg.sender] += msg.value;
+        usersPastBorrow[msg.sender] += usersBorrowed[msg.sender];
 
         (uint256 fee, uint256 paid) = calculateBorrowFee(
             usersBorrowed[msg.sender],
             msg.sender
         );
-        userAccumalatedInterest[msg.sender] += fee;
+        usersPastInterest[msg.sender] += fee;
+
+        usersBorrowed[msg.sender] += amountInUSDT;
+        usersCollateral[msg.sender] += msg.value;
+
         usersBorrowTimeStamp[msg.sender] = block.timeStamp;
 
         totalDeposits -= amountInUSDT;
