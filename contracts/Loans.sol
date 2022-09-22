@@ -64,15 +64,19 @@ contract Loans {
         return uRatio + baseRate;
     }
 
+    function _interestPerTime(address sender) public view returns (uint256) {
+        return
+            ((block.timestamp - usersBorrowTimeStamp[sender]) / 3600000) / 100;
+    }
+
     function calculateBorrowFee(uint256 _amount, address sender)
         public
         view
         returns (uint256, uint256)
     {
         uint256 borrowRate = _borrowRate();
-        uint256 fee = _amount *
-            borrowRate *
-            (block.timeStamp - usersBorrowTimeStamp[sender]);
+        uint256 interestPerTime = _interestPerTime(sender);
+        uint256 fee = (_amount * borrowRate) + (_amount * interestPerTime);
         uint256 paid = _amount - fee;
         return (fee, paid);
     }
@@ -140,12 +144,36 @@ contract Loans {
     }
 }
 
+// borrow 100 USDT
+// after 2 days
+// borrow 100 USDT             past borrows = 100    past interest = 4        current borrows = 200
+// after 3 days
+// borrow 100 USDT             past borrows = 200    past interest = 4 + 12   current borrows = 300
+// after 4 days
 
-100 => 5 = 10    
+// Now on the 9th day user have to pay 300 USDT
+// on the 1st 100 USDT interest = 18
+// on the 2nd 100 USDT interest = 14
+// on the 3rd 100 USDT interest = 8
 
-+ 100
+// total interest 40
 
-200 => 2 = 8 
+// past interest =  16               past borrows = 200
+// current interest = 24             current borrow = 300      current day = 4
 
-returning 50 answer should be 7
-values we have 10 , 200 and 2
+// //Test Cases 1
+// user returning 100 USDT thats 1/2 of past borrows and 1/3 of current borrow so he will be paying = 8 + 8 = 16
+
+// past interest =  8               past borrows = 100
+// current interest = 16             current borrow = 200      current day = 4
+
+// user again paying 100 USDT thats complete past borrow and half of current borrow = 8 + 8 = 16
+
+// past interest =  0               past borrows = 0
+// current interest = 8             current borrow = 100      current day = 4
+
+// //Test Case 2
+// user returning 250 USDT so the user pays past interest on 200 and current interest on 250 = 16 + 19.9
+
+// past interest =  0               past borrows = 0
+// current interest = 4.1             current borrow = 50      current day = 4
