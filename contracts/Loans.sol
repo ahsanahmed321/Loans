@@ -45,8 +45,11 @@ contract Loans {
     }
 
     function getExchangeRate() public returns (uint256) {
-        uint256 totalUSDT = totalDeposits + totalFeesEarned;
         uint256 totalLP = IERC20(lpToken).totalSupply();
+        if (totalLP == 0) {
+            return 1000000000000000000;
+        }
+        uint256 totalUSDT = totalDeposits + totalFeesEarned;
         return totalUSDT / totalLP;
     }
 

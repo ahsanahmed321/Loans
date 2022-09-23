@@ -34,14 +34,24 @@ describe("Loans", function () {
 
     // Minting USDT on accounts
     await USDTtokenContract.mint(
-      ethers.utils.parseEther("1000"),
+      ethers.utils.parseEther("10000"),
       accounts[0].address
     );
 
     await USDTtokenContract.mint(
-      ethers.utils.parseEther("1000"),
+      ethers.utils.parseEther("10000"),
       accounts[1].address
     );
+
+    // Providing Liquidity to Protocol
+    await USDTtokenContract.increaseAllowance(
+      LoansContract.address,
+      ethers.utils.parseEther("10000")
+    );
+
+    await LoansContract.lend(ethers.utils.parseEther("5000"), {
+      gasLimit: "550000",
+    });
   });
 
   it("deploys a Loans, LPToken and USDT contracts", async () => {
@@ -63,17 +73,6 @@ describe("Loans", function () {
   });
 
   it("Lend USDT ", async () => {
-    USDTtokenContract.connect(accounts[0]);
-    await USDTtokenContract.increaseAllowance(
-      LoansContract.address,
-      ethers.utils.parseEther("100")
-    );
-
-    LoansContract.connect(accounts[0]);
-    await LoansContract.lend(ethers.utils.parseEther("50"), {
-      gasLimit: "550000",
-    });
-
     LPtokenContract.connect(accounts[0]);
     const LPTokenBalance = await LPtokenContract.balanceOf(accounts[0].address);
 
