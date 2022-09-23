@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 import {IERC20} from "./IERC20.sol";
@@ -131,7 +131,7 @@ contract Loans {
         usersBorrowed[msg.sender] += amountInUSDT;
         usersCollateral[msg.sender] += msg.value;
 
-        usersBorrowTimeStamp[msg.sender] = block.timeStamp;
+        usersBorrowTimeStamp[msg.sender] = block.timestamp;
 
         totalDeposits -= amountInUSDT;
         totalBorrows += amountInUSDT;

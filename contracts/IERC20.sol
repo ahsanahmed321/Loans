@@ -1,15 +1,13 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 
-
 interface IERC20 {
-
     function mint(uint256 _value, address _beneficiary) external;
 
     function burnFrom(uint256 _value, address _beneficiary) external;
-    
+
     function allowance(address owner, address spender)
         external
         view
@@ -26,5 +24,6 @@ interface IERC20 {
     ) external returns (bool);
 
     function totalSupply() external returns (uint256);
+
     function balanceOf(address account) external returns (uint256);
 }

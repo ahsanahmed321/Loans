@@ -1,19 +1,82 @@
+/* eslint-disable node/no-missing-import */
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+import { Loans__factory, Loans, ERC20Token } from "../typechain";
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+const ERC20ABI = require("../artifacts/contracts/ERC20.sol/ERC20Token.json");
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
+describe("Loans", function () {
+  let accounts: any;
+  let LoansContract: Loans;
+  let USDTtokenContract: ERC20Token;
+  let LPtokenContract: ERC20Token;
 
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
+  beforeEach(async () => {
+    // deploying all contracts
+    accounts = await ethers.getSigners();
 
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
+    LoansContract = await new Loans__factory(accounts[0]).deploy();
+
+    const USDTtokenAddress = await LoansContract.usdt();
+    USDTtokenContract = new ethers.Contract(
+      USDTtokenAddress,
+      ERC20ABI.abi,
+      accounts[0]
+    ) as ERC20Token;
+
+    const LPtokenAddress = await LoansContract.lpToken();
+    LPtokenContract = new ethers.Contract(
+      LPtokenAddress,
+      ERC20ABI.abi,
+      accounts[0]
+    ) as ERC20Token;
+
+    // Minting USDT on accounts
+    await USDTtokenContract.mint(
+      ethers.utils.parseEther("1000"),
+      accounts[0].address
+    );
+
+    await USDTtokenContract.mint(
+      ethers.utils.parseEther("1000"),
+      accounts[1].address
+    );
+  });
+
+  it("deploys a Loans, LPToken and USDT contracts", async () => {
+    expect(LoansContract.address);
+    expect(LPtokenContract.address);
+    expect(USDTtokenContract.address);
+  });
+
+  it("first and second account hold the USDT", async () => {
+    const usdtBalanceAccount1 = await USDTtokenContract.balanceOf(
+      accounts[0].address
+    );
+    const usdtBalanceAccount2 = await USDTtokenContract.balanceOf(
+      accounts[1].address
+    );
+
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount1)) > 0);
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount2)) > 0);
+  });
+
+  it("Lend USDT ", async () => {
+    USDTtokenContract.connect(accounts[0]);
+    await USDTtokenContract.increaseAllowance(
+      LoansContract.address,
+      ethers.utils.parseEther("100")
+    );
+
+    LoansContract.connect(accounts[0]);
+    await LoansContract.lend(ethers.utils.parseEther("50"), {
+      gasLimit: "550000",
+    });
+
+    LPtokenContract.connect(accounts[0]);
+    const LPTokenBalance = await LPtokenContract.balanceOf(accounts[0].address);
+
+    expect(Number(ethers.utils.formatEther(LPTokenBalance)) > 400);
   });
 });
