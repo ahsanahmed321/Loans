@@ -32,15 +32,10 @@ describe("Loans", function () {
       accounts[0]
     ) as ERC20Token;
 
-    // Minting USDT on accounts
+    // Minting USDT on account
     await USDTtokenContract.mint(
       ethers.utils.parseEther("10000"),
       accounts[0].address
-    );
-
-    await USDTtokenContract.mint(
-      ethers.utils.parseEther("10000"),
-      accounts[1].address
     );
 
     // Providing Liquidity to Protocol
@@ -60,22 +55,30 @@ describe("Loans", function () {
     expect(USDTtokenContract.address);
   });
 
-  it("first and second account hold the USDT", async () => {
-    const usdtBalanceAccount1 = await USDTtokenContract.balanceOf(
+  it("first account hold the USDT", async () => {
+    const usdtBalanceAccount = await USDTtokenContract.balanceOf(
       accounts[0].address
     );
-    const usdtBalanceAccount2 = await USDTtokenContract.balanceOf(
+
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount)) > 0);
+  });
+
+  it("Protocol Hold the USDT ", async () => {
+    const LPTokenBalance = await LPtokenContract.balanceOf(accounts[0].address);
+
+    expect(Number(ethers.utils.formatEther(LPTokenBalance)) > 0);
+  });
+
+  it("Borrow USDT", async () => {
+    await LoansContract.connect(accounts[1]).borrow({
+      gasLimit: "550000",
+      value: ethers.utils.parseEther("0.5"),
+    });
+
+    const usdtBalanceAccount = await USDTtokenContract.balanceOf(
       accounts[1].address
     );
 
-    expect(Number(ethers.utils.formatEther(usdtBalanceAccount1)) > 0);
-    expect(Number(ethers.utils.formatEther(usdtBalanceAccount2)) > 0);
-  });
-
-  it("Lend USDT ", async () => {
-    LPtokenContract.connect(accounts[0]);
-    const LPTokenBalance = await LPtokenContract.balanceOf(accounts[0].address);
-
-    expect(Number(ethers.utils.formatEther(LPTokenBalance)) > 400);
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount)) === 400);
   });
 });

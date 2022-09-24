@@ -7,7 +7,9 @@ import {ERC20Token} from "./ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
-contract Loans {
+import "./Math.sol";
+
+contract Loans is Math {
     using SafeMath for uint256;
 
     AggregatorV3Interface internal priceFeed;
@@ -39,9 +41,9 @@ contract Loans {
         );
     }
 
-    function getLatestPrice() public view returns (int256) {
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        return price;
+    function getLatestPrice() public pure returns (int256) {
+        // (, int256 price, , , ) = priceFeed.latestRoundData();
+        return 1000000000000000000000;
     }
 
     function getExchangeRate() public returns (uint256) {
@@ -49,7 +51,7 @@ contract Loans {
         if (totalLP == 0) {
             return 1000000000000000000;
         }
-        uint256 totalUSDT = totalDeposits + totalFeesEarned;
+        uint256 totalUSDT = totalDeposits.add(totalFeesEarned);
         return totalUSDT / totalLP;
     }
 
@@ -59,7 +61,7 @@ contract Loans {
 
     function _borrowRate() public view returns (uint256) {
         uint256 uRatio = _utilizationRatio() / 100;
-        return uRatio + baseRate;
+        return uRatio.add(baseRate);
     }
 
     function _interestPerTime(address sender) public view returns (uint256) {
@@ -74,8 +76,8 @@ contract Loans {
     {
         uint256 borrowRate = _borrowRate();
         uint256 interestPerTime = _interestPerTime(sender);
-        uint256 fee = (_amount * borrowRate) + (_amount * interestPerTime);
-        uint256 paid = _amount - fee;
+        uint256 fee = (_amount * borrowRate).add(_amount * interestPerTime);
+        uint256 paid = _amount.sub(fee);
         return (fee, paid);
     }
 
@@ -121,7 +123,8 @@ contract Loans {
 
     function borrow() external payable {
         int256 ethPrice = getLatestPrice();
-        uint256 amountInUSDT = ((msg.value * uint256(ethPrice)) * 80) / 100;
+        uint256 amountInUSDT = mulExp(msg.value, uint256(ethPrice));
+        uint256 amountToReceive = getExp(mulExp(amountInUSDT, 80), 100);
 
         usersPastBorrow[msg.sender] += usersBorrowed[msg.sender];
 
@@ -131,15 +134,15 @@ contract Loans {
         );
         usersPastInterest[msg.sender] += fee;
 
-        usersBorrowed[msg.sender] += amountInUSDT;
+        usersBorrowed[msg.sender] += amountToReceive;
         usersCollateral[msg.sender] += msg.value;
 
         usersBorrowTimeStamp[msg.sender] = block.timestamp;
 
-        totalDeposits -= amountInUSDT;
-        totalBorrows += amountInUSDT;
+        totalDeposits -= amountToReceive;
+        totalBorrows += amountToReceive;
 
-        IERC20(usdt).transfer(msg.sender, amountInUSDT);
+        IERC20(usdt).transfer(msg.sender, amountToReceive);
     }
 
     function repay(uint256 _amount) external {
@@ -148,8 +151,8 @@ contract Loans {
         (uint256 fee, uint256 paid) = calculateBorrowFee(_amount, msg.sender);
         uint256 pastFee = calculatePastBorrowFees(_amount, msg.sender);
 
-        uint256 userPaidUSDT = paid - pastFee;
-        uint256 feesEarned = fee + pastFee;
+        uint256 userPaidUSDT = paid.sub(pastFee);
+        uint256 feesEarned = fee.add(pastFee);
 
         uint256 userReturnRatio = _amount / usersBorrowed[msg.sender];
 
