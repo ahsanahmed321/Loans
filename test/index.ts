@@ -60,13 +60,13 @@ describe("Loans", function () {
       accounts[0].address
     );
 
-    expect(Number(ethers.utils.formatEther(usdtBalanceAccount)) > 0);
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount))).gt(0);
   });
 
   it("Protocol Hold the USDT ", async () => {
     const LPTokenBalance = await LPtokenContract.balanceOf(accounts[0].address);
 
-    expect(Number(ethers.utils.formatEther(LPTokenBalance)) > 0);
+    expect(Number(ethers.utils.formatEther(LPTokenBalance))).gt(0);
   });
 
   it("Borrow USDT", async () => {
@@ -79,6 +79,30 @@ describe("Loans", function () {
       accounts[1].address
     );
 
-    expect(Number(ethers.utils.formatEther(usdtBalanceAccount)) === 400);
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount))).gte(400);
+  });
+
+  it("Borrow USDT and then repay", async () => {
+    const LoansContractWithUser = LoansContract.connect(accounts[1]);
+
+    await LoansContractWithUser.borrow({
+      gasLimit: "550000",
+      value: ethers.utils.parseEther("0.5"),
+    });
+
+    await USDTtokenContract.connect(accounts[1]).increaseAllowance(
+      LoansContract.address,
+      ethers.utils.parseEther("10000")
+    );
+
+    await LoansContractWithUser.repay(ethers.utils.parseEther("200"), {
+      gasLimit: "550000",
+    });
+
+    const usdtBalanceAccount = await USDTtokenContract.balanceOf(
+      accounts[1].address
+    );
+
+    expect(Number(ethers.utils.formatEther(usdtBalanceAccount))).gte(200);
   });
 });

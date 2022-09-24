@@ -52,11 +52,11 @@ contract Loans is Math {
             return 1000000000000000000;
         }
         uint256 totalUSDT = totalDeposits.add(totalFeesEarned);
-        return totalUSDT / totalLP;
+        return getExp(totalUSDT, totalLP);
     }
 
     function _utilizationRatio() public view returns (uint256) {
-        return totalBorrows / totalDeposits;
+        return getExp(totalBorrows, totalDeposits);
     }
 
     function _borrowRate() public view returns (uint256) {
@@ -76,7 +76,10 @@ contract Loans is Math {
     {
         uint256 borrowRate = _borrowRate();
         uint256 interestPerTime = _interestPerTime(sender);
-        uint256 fee = (_amount * borrowRate).add(_amount * interestPerTime);
+
+        uint256 fee = (mulExp(_amount, borrowRate)).add(
+            mulExp(_amount, interestPerTime)
+        );
         uint256 paid = _amount.sub(fee);
         return (fee, paid);
     }
@@ -84,7 +87,7 @@ contract Loans is Math {
     function calculatePastBorrowFees(uint256 _amount, address sender)
         public
         view
-        returns (uint256)
+        returns (uint256, uint256)
     {
         uint256 amountPaid;
         if (_amount > usersPastBorrow[sender]) {
@@ -92,8 +95,13 @@ contract Loans is Math {
         } else {
             amountPaid = _amount;
         }
-        return
-            usersPastInterest[sender] * (amountPaid / usersPastBorrow[sender]);
+        return (
+            mulExp(
+                usersPastInterest[sender],
+                getExp(amountPaid, usersPastBorrow[sender])
+            ),
+            amountPaid
+        );
     }
 
     function lend(uint256 amount) external {
@@ -106,7 +114,7 @@ contract Loans is Math {
 
     function unLend(uint256 amount) external {
         IERC20(lpToken).burnFrom(amount, msg.sender);
-        uint256 tokensToBeTransfered = amount * getExchangeRate();
+        uint256 tokensToBeTransfered = mulExp(amount, getExchangeRate());
         totalDeposits -= tokensToBeTransfered;
 
         IERC20(usdt).transfer(msg.sender, tokensToBeTransfered);
@@ -126,13 +134,15 @@ contract Loans is Math {
         uint256 amountInUSDT = mulExp(msg.value, uint256(ethPrice));
         uint256 amountToReceive = getExp(mulExp(amountInUSDT, 80), 100);
 
-        usersPastBorrow[msg.sender] += usersBorrowed[msg.sender];
+        if (usersBorrowTimeStamp[msg.sender] > 0) {
+            usersPastBorrow[msg.sender] += usersBorrowed[msg.sender];
 
-        (uint256 fee, ) = calculateBorrowFee(
-            usersBorrowed[msg.sender],
-            msg.sender
-        );
-        usersPastInterest[msg.sender] += fee;
+            (uint256 fee, ) = calculateBorrowFee(
+                usersBorrowed[msg.sender],
+                msg.sender
+            );
+            usersPastInterest[msg.sender] += fee;
+        }
 
         usersBorrowed[msg.sender] += amountToReceive;
         usersCollateral[msg.sender] += msg.value;
@@ -149,22 +159,32 @@ contract Loans is Math {
         IERC20(usdt).transferFrom(msg.sender, address(this), _amount);
 
         (uint256 fee, uint256 paid) = calculateBorrowFee(_amount, msg.sender);
-        uint256 pastFee = calculatePastBorrowFees(_amount, msg.sender);
+        (uint256 pastFee, uint256 pastPaid) = calculatePastBorrowFees(
+            _amount,
+            msg.sender
+        );
 
         uint256 userPaidUSDT = paid.sub(pastFee);
         uint256 feesEarned = fee.add(pastFee);
 
-        uint256 userReturnRatio = _amount / usersBorrowed[msg.sender];
+        uint256 userReturnRatio = getExp(
+            userPaidUSDT,
+            usersBorrowed[msg.sender]
+        );
 
-        uint256 amountOut = usersCollateral[msg.sender] * userReturnRatio;
+        uint256 amountOut = mulExp(
+            usersCollateral[msg.sender],
+            userReturnRatio
+        );
 
         usersCollateral[msg.sender] -= amountOut;
         usersBorrowed[msg.sender] -= userPaidUSDT;
-        usersPastBorrow[msg.sender] -= userPaidUSDT;
+        usersPastBorrow[msg.sender] -= pastPaid;
+
         totalDeposits += userPaidUSDT;
         totalBorrows -= userPaidUSDT;
         totalFeesEarned += feesEarned;
 
-        payable(address(this)).transfer(amountOut);
+        payable(address(msg.sender)).transfer(amountOut);
     }
 }
